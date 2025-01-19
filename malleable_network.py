@@ -4,20 +4,26 @@ import tensorflow as tf
 from keras import layers
 
 
-class GeneticNetwork(tf.keras.layers.Layer):
+class GeneticNetwork(tf.keras.Model):
     """
     Wrapper for MalleableLayer that puts together the malleable layer and an output layer
     """
-    def __init__(self, input_shape, output_features, output_activation_str='categorical_crossentropy'):
+    def __init__(self, input_shape, output_features, output_activation_str='sigmoid', build=True):
         """define the current layer """
         super(GeneticNetwork, self).__init__()
-        self.input_layer = tf.keras.Input(shape=input_shape)
+        
+        self.orig_input_shape = input_shape
+        self.orig_output_features = output_features
+        self.orig_output_activation_str = output_activation_str
+
         self.malleable_layer = MalleableLayer()
         self.output_layer = layers.Dense(output_features, activation=output_activation_str)
+        if build:
+            print(f"BUILDING WITH ORIG INPUT SHAPE OF {self.orig_input_shape}")
+            self.build((None,) + self.orig_input_shape)
 
     def call(self, inputs):
-        x = self.input_layer(inputs)
-        x = self.malleable_layer(x)
+        x = self.malleable_layer(inputs)
         x = self.output_layer(x)
         return x
 
@@ -26,6 +32,32 @@ class GeneticNetwork(tf.keras.layers.Layer):
         just mutate the malleable layer
         """
         self.malleable_layer.mutate()
+    
+    def copy(self):
+        """
+        Create a copy of the model. Model structure is copied; weights are not
+
+        WILL NEED TO BUILD THE MODEL AFTER THIS COPY
+        """
+        new_network = GeneticNetwork(
+            input_shape=self.orig_input_shape,
+            output_features=self.orig_output_features,
+            output_activation_str=self.orig_output_activation_str,
+            build=False
+        )
+
+        new_network.malleable_layer = self.malleable_layer.copy()
+        # print(f"BUILDING WITH ORIG INPUT SHAPE OF {new_network.orig_input_shape}")
+        # new_network.build((None,) + new_network.orig_input_shape)
+        return new_network
+
+
+    def print_structure(self):
+        print()
+        print("Genetic Network:")
+        self.malleable_layer.print_structure()
+        print(f"Output Layer: Dense(units={self.output_layer.units}, activation={self.output_layer.activation.__name__})")
+        print()
 
 
 class MalleableLayer(tf.keras.layers.Layer):
@@ -46,6 +78,8 @@ class MalleableLayer(tf.keras.layers.Layer):
 
     def call(self, inputs):
         x = inputs
+
+        print(f"calling malleable layer with inputs {inputs}")
         
         if self.sequential:
             # Sequential mode: run left then right
@@ -84,21 +118,27 @@ class MalleableLayer(tf.keras.layers.Layer):
             elif not self.right:
                 self.right = random.choice([MalleableLayer(), TerminalLayer(force_dimension=1)])
                 return
+            else:
+                self.left = MalleableLayer(left=self.left)
         elif selection == 4:
             if self.left is MalleableLayer:
                 self.shallow_copy(self.left)  # remove the right node
                 return
+            else:
+                self.left = None
         elif selection == 5:
             if self.right is MalleableLayer:
                 self.shallow_copy(self.right)  # remove the left node
                 return
+            else:
+                self.right = None
         else:
             pass  # by default don't change anything; mutations should be rare
 
         # make the sublayers mutate too we're only calling the mutation from the top
-        if self.left is MalleableLayer:
+        if isinstance(self.left, MalleableLayer):
             self.left.mutate()
-        if self.right is MalleableLayer:
+        if isinstance(self.right, MalleableLayer):
             self.right.mutate()
 
     def combine(self, other_layer):
@@ -110,6 +150,30 @@ class MalleableLayer(tf.keras.layers.Layer):
         self.left = other_malleable_layer.left
         self.right = other_malleable_layer.right
         self.sequential = other_malleable_layer.sequential
+
+    def copy(self):
+        new_layer = MalleableLayer()
+        new_layer.sequential = self.sequential
+        if self.left:
+            new_layer.left = self.left.copy()  # Recursively copy left if it's also a MalleableLayer
+        if self.right:
+            new_layer.right = self.right.copy()  # Recursively copy right if it's also a MalleableLayer
+        return new_layer
+
+    def print_structure(self, indent=0):
+        """Recursively print the structure of the MalleableLayer and its sub-layers"""
+        indent_str = "  " * indent
+        print(f"{indent_str}MalleableLayer(sequential={self.sequential})")
+
+        if isinstance(self.left, MalleableLayer):
+            self.left.print_structure(indent + 1)
+        elif isinstance(self.left, TerminalLayer):
+            print(f"{indent_str}  Left: {self.left}")
+
+        if isinstance(self.right, MalleableLayer):
+            self.right.print_structure(indent + 1)
+        elif isinstance(self.right, TerminalLayer):
+            print(f"{indent_str}  Right: {self.right}")
 
 
 class TerminalLayer(tf.keras.layers.Layer):
@@ -126,7 +190,7 @@ class TerminalLayer(tf.keras.layers.Layer):
     Can be these for either:
     - Dropout
     """
-    def __init__(self, force_dimension=0, vector_rep=[0, 0.5, 1, 128, 3, 3, 0], vector_choices=[range(0,3), (0.1, 0.3, 0.5, 0.7, 0.9), range(1,2), range(0,257), (1,3,5,7), (1,3,5,7), range(0,4)]):
+    def __init__(self, force_dimension=0, vector_rep=None, vector_choices=[range(0,3), (0.1, 0.3, 0.5, 0.7, 0.9), range(1,2), range(0,257), (1,3,5,7), (1,3,5,7), range(0,3)]):
         """
         define the current layer
 
@@ -137,11 +201,15 @@ class TerminalLayer(tf.keras.layers.Layer):
         super(TerminalLayer, self).__init__()
         
         self.vector_choices = vector_choices
-        # self.vector_rep = vector_rep
-        self.vector_rep = [random.choice(l) for l in self.vector_choices]
+        
+        if vector_rep is None:
+            self.vector_rep = [random.choice(l) for l in self.vector_choices]
+        else:
+            self.vector_rep = vector_rep
 
+        self.orig_force_dimension = force_dimension
         if force_dimension in (1,2):
-            self.vector_rep[2] = force_dimension
+            self.vector_rep[0] = force_dimension
 
         self.layer = self.create_terminal_layer()
 
@@ -164,6 +232,9 @@ class TerminalLayer(tf.keras.layers.Layer):
 
 
     def call(self, inputs):
+        print(f"calling TERMINAL layer with inputs {inputs}")
+        print(self.layer)
+        print()
         return self.layer(inputs)
 
 
@@ -179,24 +250,27 @@ class TerminalLayer(tf.keras.layers.Layer):
         self.vector_rep[ind] = random.choice(self.vector_choices[ind])
         self.layer = self.create_terminal_layer()
 
-    def combine(self, other_layer):
-        """combines this layer with another to create a new layer, that is hopefully better than the sum of it's parts"""
-        raise NotImplementedError("shouldn't be using combine I don't think")
-        return MalleableLayer(left=self, right=other_layer, sequential=False)
-    
-    def shallow_copy(self, other_malleable_layer):
-        """takes the elements of the other layer and puts it into this object, a shallow copy"""
-        self.left = other_malleable_layer.left
-        self.right = other_malleable_layer.right
-        self.sequential = other_malleable_layer.sequential
-        self.mutation_probs = other_malleable_layer.mutation_probs
 
+    def copy(self):
+        new_layer = TerminalLayer(
+            force_dimension=self.orig_force_dimension,
+            vector_rep=self.vector_rep,
+            vector_choices=self.vector_choices,
+        )
+        return new_layer
+
+    def __str__(self):
+        """String representation of the TerminalLayer"""
+        return f"TerminalLayer(type={type(self.layer).__name__}, vector_rep={self.vector_rep})"
 
 
 if __name__ == "__main__":
-    starter_model = GeneticNetwork(input_shape=(10,), output_features=1, activation_str='sigmoid')
-    
-    # Input and model
-    # model_output = starter_model(model_input)
-
-    starter_model.summary()
+    starter_model = GeneticNetwork(input_shape=(10,), output_features=1, output_activation_str='sigmoid')
+    for _ in range(10):
+        starter_model.mutate()
+        print("orig:")
+        starter_model.print_structure()
+        
+        copy = starter_model.copy()
+        print("copy:")
+        copy.print_structure()
