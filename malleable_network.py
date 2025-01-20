@@ -19,20 +19,40 @@ class GeneticNetwork(tf.keras.Model):
         self.malleable_layer = MalleableLayer()
         self.output_layer = layers.Dense(output_features, activation=output_activation_str)
         if build:
-            print(f"BUILDING WITH ORIG INPUT SHAPE OF {self.orig_input_shape}")
             self.build((None,) + self.orig_input_shape)
+
+    # def build(self, input_shape):
+    #     self.malleable_layer.build(input_shape)
+    #     malleable_output_shape = self.malleable_layer.compute_output_shape(input_shape)
+        
+    #     self.output_layer.build(malleable_output_shape)
+
+    #     super(GeneticNetwork, self).build(input_shape)
+
+    def set_unbuilt(self):
+        self.built=False
+        self.malleable_layer.set_unbuilt()
+        self.output_layer.built=False
 
     def call(self, inputs):
         x = self.malleable_layer(inputs)
         x = self.output_layer(x)
         return x
 
+    def force_rebuild(self):
+        self.set_unbuilt()
+        
+        self.malleable_layer.build((None,) + self.orig_input_shape)
+        
+        output_shape = self.malleable_layer.compute_output_shape((None,) + self.orig_input_shape)
+        self.output_layer.build(output_shape)
+
     def mutate(self):
         """
         just mutate the malleable layer
         """
         self.malleable_layer.mutate()
-    
+
     def copy(self):
         """
         Create a copy of the model. Model structure is copied; weights are not
@@ -47,14 +67,13 @@ class GeneticNetwork(tf.keras.Model):
         )
 
         new_network.malleable_layer = self.malleable_layer.copy()
-        # print(f"BUILDING WITH ORIG INPUT SHAPE OF {new_network.orig_input_shape}")
         # new_network.build((None,) + new_network.orig_input_shape)
         return new_network
 
 
     def print_structure(self):
         print()
-        print("Genetic Network:")
+        print("Genetic Network structure:")
         self.malleable_layer.print_structure()
         print(f"Output Layer: Dense(units={self.output_layer.units}, activation={self.output_layer.activation.__name__})")
         print()
@@ -76,22 +95,74 @@ class MalleableLayer(tf.keras.layers.Layer):
         self.right = right
         self.sequential = sequential
 
+    def build(self, input_shape):
+        if self.sequential:
+            # Sequential: Left -> Right
+            if self.left:
+                self.left.build(input_shape)
+                left_output_shape = self.left.compute_output_shape(input_shape)
+            else:
+                left_output_shape = input_shape
+            
+            if self.right:
+                self.right.build(left_output_shape)
+            self.built = True
+        else:
+            # Parallel: Left and Right run on the same input, then concatenated
+            if self.left:
+                self.left.build(input_shape)
+                left_output_shape = self.left.compute_output_shape(input_shape)
+            
+            if self.right:
+                self.right.build(input_shape)
+                right_output_shape = self.right.compute_output_shape(input_shape)
+            
+            # Check if left and right output shapes can be concatenated
+            if self.left and self.right:
+                if left_output_shape[0] != right_output_shape[0]:
+                    raise ValueError("Left and Right outputs have incompatible shapes for concatenation.")
+                self.concat_output_shape = (left_output_shape[0], left_output_shape[1] + right_output_shape[1])
+            elif self.left:
+                self.concat_output_shape = (left_output_shape[0], left_output_shape[1] + input_shape[1])
+            elif self.right:
+                self.concat_output_shape = (right_output_shape[0], right_output_shape[1] + input_shape[1])
+            else:
+                self.concat_output_shape = (input_shape[0], input_shape[1] * 2)
+            
+        super(MalleableLayer, self).build(input_shape)
+
+    def compute_output_shape(self, input_shape):
+        if self.sequential:
+            if self.right and self.left:
+                return self.right.compute_output_shape(self.left.compute_output_shape(input_shape))
+            elif self.right:
+                return self.right.compute_output_shape(input_shape)
+            elif self.left:
+                return self.left.compute_output_shape(input_shape)
+            else:
+                return input_shape
+        else:
+            return self.concat_output_shape
+
+    def set_unbuilt(self):
+        self.built = False
+        if self.left:
+            self.left.set_unbuilt()
+        if self.right:
+            self.right.set_unbuilt()
+
     def call(self, inputs):
         x = inputs
-
-        print(f"calling malleable layer with inputs {inputs}")
         
         if self.sequential:
             # Sequential mode: run left then right
             x = self.left(x) if self.left else x
             x = self.right(x) if self.right else x
         else:
-            if not self.left and not self.right:
-                return x
             # Parallel mode: run left and right and then combine
             left_output = self.left(x) if self.left else x
             right_output = self.right(x) if self.right else x
-            x = tf.keras.layers.Add()([left_output, right_output])  # or Concatenate
+            x = tf.keras.layers.Concatenate()([left_output, right_output])  # or Add
 
         return x
 
@@ -106,7 +177,7 @@ class MalleableLayer(tf.keras.layers.Layer):
 
         at the end call mutate on sublayers, we want the mutations to 
         """
-        selection = random.randint(0, 10)
+        selection = random.randint(0, 5)
         if selection == 0:
             self.left, self.right = self.right, self.left
         elif selection == 1:
@@ -121,17 +192,9 @@ class MalleableLayer(tf.keras.layers.Layer):
             else:
                 self.left = MalleableLayer(left=self.left)
         elif selection == 4:
-            if self.left is MalleableLayer:
-                self.shallow_copy(self.left)  # remove the right node
-                return
-            else:
-                self.left = None
+            self.left = False
         elif selection == 5:
-            if self.right is MalleableLayer:
-                self.shallow_copy(self.right)  # remove the left node
-                return
-            else:
-                self.right = None
+            self.right = False
         else:
             pass  # by default don't change anything; mutations should be rare
 
@@ -232,9 +295,6 @@ class TerminalLayer(tf.keras.layers.Layer):
 
 
     def call(self, inputs):
-        print(f"calling TERMINAL layer with inputs {inputs}")
-        print(self.layer)
-        print()
         return self.layer(inputs)
 
 
@@ -250,6 +310,9 @@ class TerminalLayer(tf.keras.layers.Layer):
         self.vector_rep[ind] = random.choice(self.vector_choices[ind])
         self.layer = self.create_terminal_layer()
 
+    def set_unbuilt(self):
+        self.built=False
+        self.layer.built=False
 
     def copy(self):
         new_layer = TerminalLayer(
@@ -262,15 +325,3 @@ class TerminalLayer(tf.keras.layers.Layer):
     def __str__(self):
         """String representation of the TerminalLayer"""
         return f"TerminalLayer(type={type(self.layer).__name__}, vector_rep={self.vector_rep})"
-
-
-if __name__ == "__main__":
-    starter_model = GeneticNetwork(input_shape=(10,), output_features=1, output_activation_str='sigmoid')
-    for _ in range(10):
-        starter_model.mutate()
-        print("orig:")
-        starter_model.print_structure()
-        
-        copy = starter_model.copy()
-        print("copy:")
-        copy.print_structure()

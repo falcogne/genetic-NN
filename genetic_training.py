@@ -66,13 +66,13 @@ class EvolutionStructure():
                 self.X_train,
                 self.y_train,
                 epochs=epochs,
+                verbose=0,
             )
 
             d['training_reps'] = epochs_done + epochs_to_do
 
     def kill_population(self, kill_proportion=0.5):
         to_keep = int(self.population_size * (1-kill_proportion))
-        print(f"deleted {len(self.population) - to_keep} elements from population")
         self.population = self.population[:to_keep]  # don't need the random removal
         return
         num_kept = 0
@@ -101,14 +101,14 @@ class EvolutionStructure():
         to_add = self.population_size - len(self.population)
         
         for i in range(to_add):
-            network_to_copy = self.population[i]['network'].copy()  # deep copy of GeneticNetwork object
+            network_to_copy = self.population[i % len(self.population)]['network'].copy()  # deep copy of GeneticNetwork object
             try:
                 network_to_copy.mutate()
             except AttributeError:
                 print(f"WARNING: network of type {type(network_to_copy)} cannot mutate")
 
-            print(f"BUILDING WITH ORIG INPUT SHAPE OF {network_to_copy.orig_input_shape}")
-            network_to_copy.build((None,) + network_to_copy.orig_input_shape)
+            # network_to_copy.build((None,) + network_to_copy.orig_input_shape)
+            network_to_copy.force_rebuild()
 
             network_to_copy.compile(
                 optimizer=self.optimizer_str,
@@ -123,8 +123,6 @@ class EvolutionStructure():
             )
             self.population.append(create_starter_population_entry(network_to_copy))
         
-        print(f"population is back to {len(self.population)} networks")
-
     def rank_population(self):
         self.population.sort(key=lambda x:x['fitness'], reverse=True)
         for i, d in enumerate(self.population):
@@ -135,14 +133,31 @@ class EvolutionStructure():
         """
         you should use this to run an iteration of the evolutionary algorithm, it will ensure things run in order
         """
-        print("population before:")
-        for d in self.population:
-            d['network'].print_structure()
+        print()
+        print()
+        print('*'*100)
+        for i, d in enumerate(self.population):
+            network, reps_done, rank, fitness = d['network'], d['training_reps'], d['rank'], d['fitness']
+            print()
+            print("<>"*20 + f" population index: {i}")
+            print(f"network rank {rank} (done with {reps_done} epochs)")
+            print(f"network fitness {fitness}")
+            network.print_structure()
+
+        print("\n" + "-"*50)
+        print("\nTRAINING POPULATION ...")
         self.train_population(epochs=train_epochs)
+
+        print("\n" + "-"*50)
+        print("\nEVALUATING POPULATION ...")
         self.calculate_fitness()
+
+        print("\n rank, remove, and replace")
         self.rank_population()
         self.kill_population()
         self.replace_population()
-        print("population after:")
-        for d in self.population:
-            d['network'].print_structure()
+
+        print("\n*done with iteration*\n")
+        # print("population after:")
+        # for d in self.population:
+        #     d['network'].print_structure()
