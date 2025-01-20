@@ -177,11 +177,14 @@ class MalleableLayer(tf.keras.layers.Layer):
 
         at the end call mutate on sublayers, we want the mutations to 
         """
-        selection = random.randint(0, 5)
+        selection = random.randint(0, 10)
+        # swap left and right sublayers
         if selection == 0:
             self.left, self.right = self.right, self.left
+        # flip sequential/parallel
         elif selection == 1:
             self.sequential = not self.sequential
+        # insert/replace a sublayer
         elif selection == 2 or selection == 3:
             if not self.left:
                 self.left = random.choice([MalleableLayer(), TerminalLayer(force_dimension=1)])
@@ -191,12 +194,18 @@ class MalleableLayer(tf.keras.layers.Layer):
                 return
             else:
                 self.left = MalleableLayer(left=self.left)
+        # remove a sublayer
         elif selection == 4:
             self.left = False
         elif selection == 5:
             self.right = False
+        # insert a malleable layer before a sublayer
+        elif selection == 6:
+            self.left = MalleableLayer(left=self.left)
+        elif selection == 7:
+            self.right = MalleableLayer(left=self.right)
         else:
-            pass  # by default don't change anything; mutations should be rare
+            pass  # don't mutate anything, going to mutate the subtree anyways
 
         # make the sublayers mutate too we're only calling the mutation from the top
         if isinstance(self.left, MalleableLayer):
@@ -253,7 +262,7 @@ class TerminalLayer(tf.keras.layers.Layer):
     Can be these for either:
     - Dropout
     """
-    def __init__(self, force_dimension=0, vector_rep=None, vector_choices=[range(0,3), (0.1, 0.3, 0.5, 0.7, 0.9), range(1,2), range(0,257), (1,3,5,7), (1,3,5,7), range(0,3)]):
+    def __init__(self, force_dimension=0, vector_rep=None, vector_choices=[(1,), range(0, 3), (0.1, 0.3, 0.5, 0.7, 0.9), range(0,257), (1,3,5,7), (1,3,5,7), range(0,3)]):
         """
         define the current layer
 
@@ -283,10 +292,11 @@ class TerminalLayer(tf.keras.layers.Layer):
         if is_1d == 1:
             if layer_ind == 0:
                 return layers.Dropout(dropout_pct)
-            if layer_ind == 1:
-                return layers.Conv1D(feature_num, kernel_size=kwargs.get('kernel_size', kernel_size_0), activation=activation_string, **kwargs)
             else:
+                # if it's normal data
                 return layers.Dense(feature_num, activation=kwargs.get('activation', activation_string), **kwargs)
+                # if it's sequence data
+                # return layers.Conv1D(feature_num, kernel_size=kwargs.get('kernel_size', kernel_size_0), activation=activation_string, **kwargs)
         else:
             if layer_ind == 0:
                 return layers.MaxPool2D()

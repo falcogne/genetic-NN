@@ -9,12 +9,15 @@ def create_starter_population_entry(network):
         'training_reps': 0,
         'rank': None,
         'fitness': None,
+        'stats': [],
     }
 
 class EvolutionStructure():
     def __init__(self, population:list, X_train, y_train, X_test, y_test, optimizer_str='adam', loss_str='categorical_crossentropy'):
         self.population = population
-        self.average_fitnesses = []
+        self.all_stats = []
+        self.best_stats = []
+        self.average_stats = []
         self.population_size = len(self.population)
 
         self.optimizer_str = optimizer_str
@@ -40,24 +43,30 @@ class EvolutionStructure():
 
 
     def calculate_fitness(self):
-        avg_fitness = 0
+        stat_list = []
         for d in self.population:
-            network, reps_done, rank, fitness = d['network'], d['training_reps'], d['rank'], d['fitness']
+            network, epochs_done, rank, fitness, stats = d['network'], d['training_reps'], d['rank'], d['fitness'], d['stats']
             if fitness is not None:
-                avg_fitness += fitness
+                stat_list.append(stats)
                 continue  # already calculated fitness, don't do it again
 
-            loss, accuracy, precision, recall, auc = network.evaluate(self.X_test, self.y_test)
+            # loss, accuracy, precision, recall, auc
+            stats = network.evaluate(self.X_test, self.y_test)
+            
+            loss = stats[0]
             fitness = -loss
             d['fitness'] = fitness
+            d['stats'] = stats
 
-            avg_fitness += fitness
+            stat_list.append(stats)
         
-        self.average_fitnesses.append(avg_fitness/len(self.population))
+        self.all_stats.append(stat_list)
+        self.best_stats.append(max(stat_list, key=lambda x:x[0]))
+        # self.best_stats.append(max(stat_list, key=lambda x:x[0]))
 
     def train_population(self, epochs=1):
         for d in self.population:
-            network, epochs_done, rank, fitness = d['network'], d['training_reps'], d['rank'], d['fitness']
+            network, epochs_done, rank, fitness, stats = d['network'], d['training_reps'], d['rank'], d['fitness'], d['stats']
             epochs_to_do = epochs - epochs_done
             if epochs_to_do <= 0:
                 continue  # already trained don't need to do more
@@ -137,10 +146,10 @@ class EvolutionStructure():
         print()
         print('*'*100)
         for i, d in enumerate(self.population):
-            network, reps_done, rank, fitness = d['network'], d['training_reps'], d['rank'], d['fitness']
+            network, epochs_done, rank, fitness, stats = d['network'], d['training_reps'], d['rank'], d['fitness'], d['stats']
             print()
-            print("<>"*20 + f" population index: {i}")
-            print(f"network rank {rank} (done with {reps_done} epochs)")
+            print(f"<{i}>"*20)
+            print(f"network rank {rank} (done with {epochs_done} epochs)")
             print(f"network fitness {fitness}")
             network.print_structure()
 
