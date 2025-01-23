@@ -1,4 +1,3 @@
-from malleable_network import GeneticNetwork
 import random
 import tensorflow as tf
 # import tensorflow_addons as tfa
@@ -61,8 +60,7 @@ class EvolutionStructure():
             stat_list.append(stats)
         
         self.all_stats.append(stat_list)
-        self.best_stats.append(max(stat_list, key=lambda x:x[0]))
-        # self.best_stats.append(max(stat_list, key=lambda x:x[0]))
+        self.best_stats.append(min(stat_list, key=lambda x:x[0]))  # DON'T FORGET THE MIN HERE if you change the stat
 
     def train_population(self, epochs=1):
         for d in self.population:
@@ -75,7 +73,7 @@ class EvolutionStructure():
                 self.X_train,
                 self.y_train,
                 epochs=epochs,
-                verbose=0,
+                verbose=1,
             )
 
             d['training_reps'] = epochs_done + epochs_to_do
@@ -110,7 +108,7 @@ class EvolutionStructure():
         to_add = self.population_size - len(self.population)
         
         for i in range(to_add):
-            network_to_copy = self.population[i % len(self.population)]['network'].copy()  # deep copy of GeneticNetwork object
+            network_to_copy = self.population[i % len(self.population)]['network'].copy()
             try:
                 network_to_copy.mutate()
             except AttributeError:

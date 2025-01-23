@@ -4,19 +4,19 @@ import tensorflow as tf
 from keras import layers
 
 
-class GeneticNetwork(tf.keras.Model):
+class GeneticNetwork1D(tf.keras.Model):
     """
-    Wrapper for MalleableLayer that puts together the malleable layer and an output layer
+    Wrapper for MalleableLayer1D that puts together the malleable layer and an output layer
     """
     def __init__(self, input_shape, output_features, output_activation_str='sigmoid', build=True):
         """define the current layer """
-        super(GeneticNetwork, self).__init__()
+        super(GeneticNetwork1D, self).__init__()
         
         self.orig_input_shape = input_shape
         self.orig_output_features = output_features
         self.orig_output_activation_str = output_activation_str
 
-        self.malleable_layer = MalleableLayer()
+        self.malleable_layer = MalleableLayer1D()
         self.output_layer = layers.Dense(output_features, activation=output_activation_str)
         if build:
             self.build((None,) + self.orig_input_shape)
@@ -27,7 +27,7 @@ class GeneticNetwork(tf.keras.Model):
         
     #     self.output_layer.build(malleable_output_shape)
 
-    #     super(GeneticNetwork, self).build(input_shape)
+    #     super(GeneticNetwork1D, self).build(input_shape)
 
     def set_unbuilt(self):
         self.built=False
@@ -43,8 +43,8 @@ class GeneticNetwork(tf.keras.Model):
         self.set_unbuilt()
         
         self.malleable_layer.build((None,) + self.orig_input_shape)
-        
         output_shape = self.malleable_layer.compute_output_shape((None,) + self.orig_input_shape)
+        
         self.output_layer.build(output_shape)
 
     def mutate(self):
@@ -59,7 +59,7 @@ class GeneticNetwork(tf.keras.Model):
 
         WILL NEED TO BUILD THE MODEL AFTER THIS COPY
         """
-        new_network = GeneticNetwork(
+        new_network = GeneticNetwork1D(
             input_shape=self.orig_input_shape,
             output_features=self.orig_output_features,
             output_activation_str=self.orig_output_activation_str,
@@ -79,18 +79,18 @@ class GeneticNetwork(tf.keras.Model):
         print()
 
 
-class MalleableLayer(tf.keras.layers.Layer):
+class MalleableLayer1D(tf.keras.layers.Layer):
     """
     superclass layer that can be altered easily to create a new network structure
 
     Uses a binary tree structure to store the layer structure. Runs the current node, then the left node, then the right node.
 
-    So to get a sequential layer, put all linear layers in the left subnode, and MalleableLayer as the right subnode.
+    So to get a sequential layer, put all linear layers in the left subnode, and MalleableLayer1D as the right subnode.
     Terminate by making the subnodes terminal layers (or to make them blank: None or False)
     """
     def __init__(self, left=False, right=False, sequential=True):
         """define the current layer """
-        super(MalleableLayer, self).__init__()
+        super(MalleableLayer1D, self).__init__()
         self.left = left
         self.right = right
         self.sequential = sequential
@@ -128,8 +128,8 @@ class MalleableLayer(tf.keras.layers.Layer):
                 self.concat_output_shape = (right_output_shape[0], right_output_shape[1] + input_shape[1])
             else:
                 self.concat_output_shape = (input_shape[0], input_shape[1] * 2)
-            
-        super(MalleableLayer, self).build(input_shape)
+        
+        super(MalleableLayer1D, self).build(input_shape)
 
     def compute_output_shape(self, input_shape):
         if self.sequential:
@@ -150,7 +150,8 @@ class MalleableLayer(tf.keras.layers.Layer):
             self.left.set_unbuilt()
         if self.right:
             self.right.set_unbuilt()
-
+    
+    @tf.function
     def call(self, inputs):
         x = inputs
         
@@ -187,13 +188,11 @@ class MalleableLayer(tf.keras.layers.Layer):
         # insert/replace a sublayer
         elif selection == 2 or selection == 3:
             if not self.left:
-                self.left = random.choice([MalleableLayer(), TerminalLayer(force_dimension=1)])
+                self.left = random.choice([MalleableLayer1D(), TerminalLayer1D()])
                 return
             elif not self.right:
-                self.right = random.choice([MalleableLayer(), TerminalLayer(force_dimension=1)])
+                self.right = random.choice([MalleableLayer1D(), TerminalLayer1D()])
                 return
-            else:
-                self.left = MalleableLayer(left=self.left)
         # remove a sublayer
         elif selection == 4:
             self.left = False
@@ -201,21 +200,21 @@ class MalleableLayer(tf.keras.layers.Layer):
             self.right = False
         # insert a malleable layer before a sublayer
         elif selection == 6:
-            self.left = MalleableLayer(left=self.left)
+            self.left = MalleableLayer1D(left=self.left)
         elif selection == 7:
-            self.right = MalleableLayer(left=self.right)
+            self.right = MalleableLayer1D(left=self.right)
         else:
             pass  # don't mutate anything, going to mutate the subtree anyways
 
         # make the sublayers mutate too we're only calling the mutation from the top
-        if isinstance(self.left, MalleableLayer):
+        if isinstance(self.left, MalleableLayer1D):
             self.left.mutate()
-        if isinstance(self.right, MalleableLayer):
+        if isinstance(self.right, MalleableLayer1D):
             self.right.mutate()
 
     def combine(self, other_layer):
         """combines this layer with another to create a new layer, that is hopefully better than the sum of it's parts"""
-        return MalleableLayer(left=self, right=other_layer, sequential=False)
+        return MalleableLayer1D(left=self, right=other_layer, sequential=False)
     
     def shallow_copy(self, other_malleable_layer):
         """takes the elements of the other layer and puts it into this object, a shallow copy"""
@@ -224,33 +223,33 @@ class MalleableLayer(tf.keras.layers.Layer):
         self.sequential = other_malleable_layer.sequential
 
     def copy(self):
-        new_layer = MalleableLayer()
+        new_layer = MalleableLayer1D()
         new_layer.sequential = self.sequential
         if self.left:
-            new_layer.left = self.left.copy()  # Recursively copy left if it's also a MalleableLayer
+            new_layer.left = self.left.copy()  # Recursively copy left if it's also a MalleableLayer1D
         if self.right:
-            new_layer.right = self.right.copy()  # Recursively copy right if it's also a MalleableLayer
+            new_layer.right = self.right.copy()  # Recursively copy right if it's also a MalleableLayer1D
         return new_layer
 
     def print_structure(self, indent=0):
-        """Recursively print the structure of the MalleableLayer and its sub-layers"""
+        """Recursively print the structure of the MalleableLayer1D and its sub-layers"""
         indent_str = "  " * indent
-        print(f"{indent_str}MalleableLayer(sequential={self.sequential})")
+        print(f"{indent_str}MalleableLayer1D(sequential={self.sequential})")
 
-        if isinstance(self.left, MalleableLayer):
+        if isinstance(self.left, MalleableLayer1D):
             self.left.print_structure(indent + 1)
-        elif isinstance(self.left, TerminalLayer):
+        elif isinstance(self.left, TerminalLayer1D):
             print(f"{indent_str}  Left: {self.left}")
 
-        if isinstance(self.right, MalleableLayer):
+        if isinstance(self.right, MalleableLayer1D):
             self.right.print_structure(indent + 1)
-        elif isinstance(self.right, TerminalLayer):
+        elif isinstance(self.right, TerminalLayer1D):
             print(f"{indent_str}  Right: {self.right}")
 
 
-class TerminalLayer(tf.keras.layers.Layer):
+class TerminalLayer1D(tf.keras.layers.Layer):
     """
-    Layer within a MalleableLayer that actually does the calculation
+    Layer within a MalleableLayer1D that actually does the calculation
 
     Can be any of these options for 1D:
     - Dense
@@ -262,15 +261,15 @@ class TerminalLayer(tf.keras.layers.Layer):
     Can be these for either:
     - Dropout
     """
-    def __init__(self, force_dimension=0, vector_rep=None, vector_choices=[(1,), range(0, 3), (0.1, 0.3, 0.5, 0.7, 0.9), range(0,257), (1,3,5,7), (1,3,5,7), range(0,3)]):
+    def __init__(self, vector_rep=None, vector_choices=[range(0, 3), (0.1, 0.3, 0.5, 0.7, 0.9), range(0,257), (1,3,5,7), range(0,3)]):
         """
         define the current layer
 
-        indicies:              [0,                  1,                2,           3,        4,             5,             6              ]        
-        vector representation: [is one dimensional, layer type index, dropout pct, features, kernel size 0, kernel size 1, activation func]
-        range for each (incl): [(0-1),              (0-2),            (0.0-1.0),   (0-256),  (1,3,5,7),     (1,3,5,7),     (0-3?),        ]
+        indicies:              [0,                1,           2,        3,             4              ]        
+        vector representation: [layer type index, dropout pct, features, kernel size 0, activation func]
+        range for each (incl): [(0-2),            (0.0-1.0),   (0-256),  (1,3,5,7),     (0-3?),        ]
         """
-        super(TerminalLayer, self).__init__()
+        super(TerminalLayer1D, self).__init__()
         
         self.vector_choices = vector_choices
         
@@ -279,30 +278,20 @@ class TerminalLayer(tf.keras.layers.Layer):
         else:
             self.vector_rep = vector_rep
 
-        self.orig_force_dimension = force_dimension
-        if force_dimension in (1,2):
-            self.vector_rep[0] = force_dimension
-
         self.layer = self.create_terminal_layer()
 
     
     def create_terminal_layer(self, **kwargs):
-        is_1d, layer_ind, dropout_pct, feature_num, kernel_size_0, kernel_size_1, activation_func_num = self.vector_rep
+        layer_ind, dropout_pct, feature_num, kernel_size_0, activation_func_num = self.vector_rep
         activation_string = ['sigmoid', 'tanh', 'relu'][activation_func_num]
-        if is_1d == 1:
-            if layer_ind == 0:
-                return layers.Dropout(dropout_pct)
-            else:
-                # if it's normal data
-                return layers.Dense(feature_num, activation=kwargs.get('activation', activation_string), **kwargs)
-                # if it's sequence data
-                # return layers.Conv1D(feature_num, kernel_size=kwargs.get('kernel_size', kernel_size_0), activation=activation_string, **kwargs)
-        else:
-            if layer_ind == 0:
-                return layers.MaxPool2D()
-            else:
-                return layers.Conv2D(feature_num, kernel_size=kwargs.get('kernel_size', (kernel_size_0, kernel_size_1)), activation=activation_string, **kwargs)
 
+        if layer_ind == 0:
+            return layers.Dropout(dropout_pct)
+        else:
+            # if it's normal data
+            return layers.Dense(feature_num, activation=kwargs.get('activation', activation_string), **kwargs)
+            # if it's sequence data
+            # return layers.Conv1D(feature_num, kernel_size=kwargs.get('kernel_size', kernel_size_0), activation=activation_string, **kwargs)
 
     def call(self, inputs):
         return self.layer(inputs)
@@ -325,13 +314,12 @@ class TerminalLayer(tf.keras.layers.Layer):
         self.layer.built=False
 
     def copy(self):
-        new_layer = TerminalLayer(
-            force_dimension=self.orig_force_dimension,
+        new_layer = TerminalLayer1D(
             vector_rep=self.vector_rep,
             vector_choices=self.vector_choices,
         )
         return new_layer
 
     def __str__(self):
-        """String representation of the TerminalLayer"""
-        return f"TerminalLayer(type={type(self.layer).__name__}, vector_rep={self.vector_rep})"
+        """String representation of the TerminalLayer1D"""
+        return f"TerminalLayer1D(type={type(self.layer).__name__}, vector_rep={self.vector_rep})"
