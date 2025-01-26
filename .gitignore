@@ -1,2 +1,4 @@
 *.pyc
 titanic-model/
+.venv
+run in tree structure

@@ -1,0 +1,21 @@
+# Core dependencies
+tensorflow-macos==2.12.0  # Ensure compatibility with macOS (adjust version if necessary)
+tensorflow-metal==0.8.0   # GPU acceleration for macOS with Metal
+keras                     # Usually included with TensorFlow, but listed here for clarity
+
+# Jupyter notebook
+jupyter                   # For running Jupyter notebooks
+
+# Data manipulation and visualization
+numpy                     # For numerical computations
+pandas                    # For data manipulation
+matplotlib                # For plotting and visualization
+
+# Scikit-learn for preprocessing and train-test split
+scikit-learn              # For model selection and preprocessing
+
+# TensorFlow Datasets for dataset utilities
+tensorflow-datasets       # For loading datasets like CIFAR-10
+
+# Ensure pip is up to date
+pip

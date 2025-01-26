@@ -2,9 +2,11 @@ import random
 import tensorflow as tf
 # import tensorflow_addons as tfa
 
-def create_starter_population_entry(network):
+def create_starter_population_entry(network, model=None):
     return {
         'network': network,
+        'model': network.to_keras_model() if model is None else model,
+        'compiled': False,
         'training_reps': 0,
         'rank': None,
         'fitness': None,
@@ -12,7 +14,7 @@ def create_starter_population_entry(network):
     }
 
 class EvolutionStructure():
-    def __init__(self, population:list, X_train, y_train, X_test, y_test, optimizer_str='adam', loss_str='categorical_crossentropy'):
+    def __init__(self, population:list, X_train, y_train, X_test, y_test, optimizer_str='adam', loss_str='categorical_crossentropy', num_mutations=1):
         self.population = population
         self.all_stats = []
         self.best_stats = []
@@ -27,8 +29,10 @@ class EvolutionStructure():
         self.X_test = X_test
         self.y_test = y_test
 
+        self.num_mutations = num_mutations
+
         for d in self.population:
-            d['network'].compile(
+            d['model'].compile(
                 optimizer=self.optimizer_str,
                 loss=self.loss_str,
                 metrics=[
@@ -39,18 +43,19 @@ class EvolutionStructure():
                     tf.keras.metrics.AUC()
                 ]
             )
+            d['compiled'] = True
 
 
     def calculate_fitness(self):
         stat_list = []
         for d in self.population:
-            network, epochs_done, rank, fitness, stats = d['network'], d['training_reps'], d['rank'], d['fitness'], d['stats']
+            model, epochs_done, rank, fitness, stats = d['model'], d['training_reps'], d['rank'], d['fitness'], d['stats']
             if fitness is not None:
                 stat_list.append(stats)
                 continue  # already calculated fitness, don't do it again
 
             # loss, accuracy, precision, recall, auc
-            stats = network.evaluate(self.X_test, self.y_test)
+            stats = model.evaluate(self.X_test, self.y_test)
             
             loss = stats[0]
             fitness = -loss
@@ -64,12 +69,12 @@ class EvolutionStructure():
 
     def train_population(self, epochs=1):
         for d in self.population:
-            network, epochs_done, rank, fitness, stats = d['network'], d['training_reps'], d['rank'], d['fitness'], d['stats']
+            model, epochs_done, rank, fitness, stats = d['model'], d['training_reps'], d['rank'], d['fitness'], d['stats']
             epochs_to_do = epochs - epochs_done
             if epochs_to_do <= 0:
                 continue  # already trained don't need to do more
 
-            network.fit(
+            model.fit(
                 self.X_train,
                 self.y_train,
                 epochs=epochs,
@@ -85,7 +90,7 @@ class EvolutionStructure():
         num_kept = 0
         remaining_pop = []
         for d in self.population:
-            network, reps_done, rank, fitness = d['network'], d['training_reps'], d['rank'], d['fitness']
+            model, reps_done, rank, fitness = d['model'], d['training_reps'], d['rank'], d['fitness']
             if not isinstance(rank, int):
                 raise TypeError(f"rank {rank} is not an integer, run `rank_population()` before this function")
             delete_prob = rank / self.population_size
@@ -105,19 +110,21 @@ class EvolutionStructure():
         make the population back to its normal size by copying from the front of the population.
         the idea is that you would have already sorted the population by rank so this takes from the best ones first.
         """
-        to_add = self.population_size - len(self.population)
+        start_population_length = len(self.population)
+        to_add = self.population_size - start_population_length
         
         for i in range(to_add):
-            network_to_copy = self.population[i % len(self.population)]['network'].copy()
+            network_to_copy = self.population[i % start_population_length]['network'].copy()
             try:
-                network_to_copy.mutate()
+                for _ in range(self.num_mutations):
+                    network_to_copy.mutate()
             except AttributeError:
                 print(f"WARNING: network of type {type(network_to_copy)} cannot mutate")
 
             # network_to_copy.build((None,) + network_to_copy.orig_input_shape)
-            network_to_copy.force_rebuild()
+            model = network_to_copy.to_keras_model()
 
-            network_to_copy.compile(
+            model.compile(
                 optimizer=self.optimizer_str,
                 loss=self.loss_str,
                 metrics=[
@@ -128,7 +135,10 @@ class EvolutionStructure():
                     tf.keras.metrics.AUC()
                 ]
             )
-            self.population.append(create_starter_population_entry(network_to_copy))
+            population_entry = create_starter_population_entry(network_to_copy, model)
+            population_entry['compiled'] = True
+            self.population.append(population_entry)
+
         
     def rank_population(self):
         self.population.sort(key=lambda x:x['fitness'], reverse=True)
@@ -149,7 +159,7 @@ class EvolutionStructure():
             print(f"<{i}>"*20)
             print(f"network rank {rank} (done with {epochs_done} epochs)")
             print(f"network fitness {fitness}")
-            network.print_structure()
+            print(str(network))
 
         print("\n" + "-"*50)
         print("\nTRAINING POPULATION ...")
