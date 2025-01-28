@@ -1,8 +1,3 @@
-# Core dependencies
-tensorflow-macos==2.12.0  # Ensure compatibility with macOS (adjust version if necessary)
-tensorflow-metal==0.8.0   # GPU acceleration for macOS with Metal
-keras                     # Usually included with TensorFlow, but listed here for clarity
-
 # Jupyter notebook
 jupyter                   # For running Jupyter notebooks
 

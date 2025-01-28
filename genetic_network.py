@@ -12,6 +12,8 @@ class GeneticNetwork:
             output_features (int): Number of output units (e.g., for classification).
             output_activation (str): Activation function for the output layer.
         """
+
+        # TODO: keep the optimization string here and make it malleable??
         self.input_shape = input_shape
         self.output_features = output_features
         self.output_activation_str = output_activation_str

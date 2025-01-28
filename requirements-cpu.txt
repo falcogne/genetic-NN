@@ -1,0 +1,3 @@
+# run on CPU
+tensorflow
+keras                     # Usually included with TensorFlow, but listed here for clarity
