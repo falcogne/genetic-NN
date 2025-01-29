@@ -22,6 +22,16 @@ $(VENV_DIR)/bin/activate: requirements.txt
 jupyter:
 	$(VENV_DIR)/bin/jupyter notebook
 
+# Run 1D data
+run-1d: setup_cpu
+	USE_2D_DATA=False $(VENV_DIR)/bin/python main.py
+	# $(MAKE) clean
+
+# Run 2D data
+run-2d: setup_gpu
+	USE_2D_DATA=True $(VENV_DIR)/bin/python main.py
+	# $(MAKE) clean
+
 # Clean up virtual environment
 clean:
 	rm -rf $(VENV_DIR)
