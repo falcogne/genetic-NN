@@ -13,6 +13,7 @@ from genetic_network import GeneticNetwork1D, GeneticNetwork2D
 
 import os
 
+# global dict to share variables with main.py
 ENV_VARIABLES = {}
 
 
@@ -157,18 +158,23 @@ def run_for_time(evolution, hours, minutes, seconds):
 
     start_time = time.time()
     i = 0
-    while True:
-        ran_for = time.time() - start_time
-        if ran_for > seconds_to_run:
-            break
+
+    ran_for = time.time() - start_time
+    while ran_for < seconds_to_run:
         print(f"\n\n--ITERATION {i} | {ran_for:.2f} seconds in out of {seconds_to_run} --\n\n")
         evolution.iterate_population(train_epochs=epochs)
         i+=1
+        ran_for = time.time() - start_time
 
-    print("\n   <All done with iterating>")
+    print(f"\n   <All done with iterating after {ran_for:.2f} seconds>")
 
 
 def print_best_networks(evolution):
+    print("&"*100)
+    print()
+    print("Printing results of best networks (will train if untrained)")
+    print()
+    print("&"*100)
     epochs = ENV_VARIABLES['EPOCHS']
 
     evolution.train_population(epochs=epochs)

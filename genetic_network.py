@@ -119,7 +119,8 @@ class GeneticNetwork2D(GeneticNetwork):
         """
         Mutate the internal MalleableLayer structure.
         """
-        self.malleable_layer.mutate()
+        self.convolution_base.mutate()
+        self.feedforward.mutate()
     
 
     def __str__(self):

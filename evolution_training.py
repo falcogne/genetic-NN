@@ -1,6 +1,7 @@
 import random
 import tensorflow as tf
 # import tensorflow_addons as tfa
+from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor
 
 def create_starter_population_entry(network, model=None):
     return {
@@ -67,21 +68,35 @@ class EvolutionStructure():
         self.all_stats.append(stat_list)
         self.best_stats.append(min(stat_list, key=lambda x:x[0]))  # DON'T FORGET THE MIN HERE if you change the stat
 
+
+    def train_model(self, d, X_train, y_train, epochs):
+        model, epochs_done = d['model'], d['training_reps']
+        epochs_to_do = epochs - epochs_done
+        if epochs_to_do <= 0:
+            return d  # already trained
+
+        model.fit(
+            X_train,
+            y_train,
+            epochs=epochs_to_do,
+            verbose=1,
+        )
+
+        d['training_reps'] = epochs_done + epochs_to_do
+        return d
+
+
     def train_population(self, epochs=1):
-        for d in self.population:
-            model, epochs_done, rank, fitness, stats = d['model'], d['training_reps'], d['rank'], d['fitness'], d['stats']
-            epochs_to_do = epochs - epochs_done
-            if epochs_to_do <= 0:
-                continue  # already trained don't need to do more
+        with ThreadPoolExecutor() as executor:
+        # with ProcessPoolExecutor() as executor:
+            futures = [
+                executor.submit(self.train_model, d, self.X_train, self.y_train, epochs)
+                for d in self.population
+            ]
 
-            model.fit(
-                self.X_train,
-                self.y_train,
-                epochs=epochs,
-                verbose=1,
-            )
+            # Collect results and update population
+            self.population = [future.result() for future in futures]
 
-            d['training_reps'] = epochs_done + epochs_to_do
 
     def kill_population(self, kill_proportion=0.5):
         to_keep = int(self.population_size * (1-kill_proportion))
@@ -118,8 +133,12 @@ class EvolutionStructure():
             try:
                 for _ in range(self.num_mutations):
                     network_to_copy.mutate()
-            except AttributeError:
-                print(f"WARNING: network of type {type(network_to_copy)} cannot mutate")
+            except AttributeError as e:
+                print("#"*100)
+                print(f"\n\nWARNING: network of type {type(network_to_copy)} cannot mutate")
+                print(e)
+                print("\n")
+                print("#"*100)
 
             # network_to_copy.build((None,) + network_to_copy.orig_input_shape)
             model = network_to_copy.to_keras_model()
@@ -143,7 +162,7 @@ class EvolutionStructure():
     def rank_population(self):
         self.population.sort(key=lambda x:x['fitness'], reverse=True)
         for i, d in enumerate(self.population):
-            print(d)
+            # print(d)
             d['rank'] = i
 
     def iterate_population(self, train_epochs=20):

@@ -1,3 +1,6 @@
 # run on GPU
-tensorflow-macos==2.12.0  # Ensure compatibility with macOS (adjust version if necessary)
-tensorflow-metal==0.8.0   # GPU acceleration for macOS with Metal
+# tensorflow-macos==2.12.0
+tensorflow==2.12.0
+tensorflow-metal==1.0.0
+# tensorflow-macos==2.12.0  # Ensure compatibility with macOS (adjust version if necessary)
+# tensorflow-metal==0.8.0   # GPU acceleration for macOS with Metal

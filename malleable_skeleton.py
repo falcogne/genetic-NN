@@ -59,7 +59,7 @@ class MalleableLayer():
             layer = random.choice(['terminal'] * 2 + ["malleable"])
             if layer == "malleable":
                 # can only add other type becaues don't want nested structure for no reason
-                to_add = MalleableLayer(sequential=not self.sequential)
+                to_add = MalleableLayer(sequential=not self.sequential, is_1d=self.is_1d)
             elif layer == "terminal":
                 to_add = self.new_terminal_layer()
 
@@ -111,6 +111,9 @@ class MalleableLayer():
             if isinstance(layer, MalleableLayer):
                 # Recursively process the nested MalleableLayer
                 return layer.to_keras_model(x.shape[1:])(x)
+            elif isinstance(layer, TerminalLayer):
+                # Directly use the Keras layer
+                return layer.layer(x)
             elif isinstance(layer, layers.Layer):
                 # Directly use the Keras layer
                 return layer(x)

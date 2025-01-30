@@ -6,6 +6,7 @@ import tensorflow as tf
 
 
 class TerminalLayer(tf.keras.layers.Layer):
+
     def __init__(self, vector_rep, vector_choices):
         """
         Take vector rep and choices and create layer
@@ -28,12 +29,27 @@ class TerminalLayer(tf.keras.layers.Layer):
             self.vector_rep = [random.choice(l) for l in self.vector_choices]
 
         self.layer = self.create_terminal_layer()
-    
+
+
     def create_terminal_layer(self, **kwargs):
         raise NotImplementedError("TerminalLayer subclass needs to define this")
 
+
     def call(self, inputs):
         return self.layer(inputs)
+
+
+    def mutate(self):
+        """
+        change some structure of this layer by changing the vector representation
+
+        if it decides to change index 1, the layer type will change
+
+        it cannot change the layer from 1d to 2d or vice versa
+        """
+        ind = random.randint(0, len(self.vector_rep)-1)
+        self.vector_rep[ind] = random.choice(self.vector_choices[ind])
+        self.layer = self.create_terminal_layer()
 
 
 class TerminalLayer1D(TerminalLayer):
@@ -50,6 +66,7 @@ class TerminalLayer1D(TerminalLayer):
     Can be these for either:
     - Dropout
     """
+
     def __init__(self, vector_rep=None, vector_choices=[range(0, 3), (0.1, 0.3, 0.5, 0.7, 0.9), range(0,257), (1,3,5,7), range(0,3)]):
         """
         define the current layer
@@ -76,21 +93,10 @@ class TerminalLayer1D(TerminalLayer):
             # return layers.Conv1D(feature_num, kernel_size=kwargs.get('kernel_size', kernel_size_0), activation=activation_string, **kwargs)
 
 
-    def mutate(self):
-        """
-        change some structure of this layer by changing the vector representation
-
-        if it decides to change index 1, the layer type will change
-
-        it cannot change the layer from 1d to 2d or vice versa
-        """
-        ind = random.randint(1, len(self.vector_rep)-1)
-        self.vector_rep[ind] = random.choice(self.vector_choices[ind])
-        self.layer = self.create_terminal_layer()
-
     def set_unbuilt(self):
         self.built=False
         self.layer.built=False
+
 
     def copy(self):
         new_layer = TerminalLayer1D(
@@ -98,6 +104,7 @@ class TerminalLayer1D(TerminalLayer):
             vector_choices=copy.deepcopy(self.vector_choices),
         )
         return new_layer
+
 
     def __str__(self):
         """String representation of the TerminalLayer1D"""
@@ -127,6 +134,8 @@ class TerminalLayer2D(TerminalLayer):
         range for each (incl): [(0-2),            (1-80),  (1,3,5,7),     (1,3,5,7),     (0-3?),        ]
         """
         super(TerminalLayer2D, self).__init__(vector_rep, vector_choices)
+        # make the kernel square at the start
+        self.vector_rep[3] = self.vector_rep[2]
 
     
     def create_terminal_layer(self, **kwargs):
@@ -146,6 +155,7 @@ class TerminalLayer2D(TerminalLayer):
             vector_choices=self.vector_choices,
         )
         return new_layer
+
 
     def __str__(self):
         """String representation of the TerminalLayer2D"""
