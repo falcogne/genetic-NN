@@ -10,10 +10,11 @@ BATCH_SIZE = 32
 # Won't use this by default, will take from makefile (which is why this needs to be string)
 USE_2D_DATA = "True"  
 # USE_2D_DATA = "False"
-EPOCHS = 1
+EPOCHS = 2
 OPT_STRING = "adam"
 
-POPULATION_SIZE = 4
+POPULATION_SIZE = 20
+MUTATIONS_PER_ITER = 1
 
 # allow it to use more epochs as it aproaches the end of training, networks should be better by then
 # TODO: don't use this yet but maybe should
@@ -56,7 +57,8 @@ if __name__ == "__main__":
         X_val,
         y_val,
         optimizer_str=ENV_VARIABLES['OPT_STRING'],
-        loss_str=ENV_VARIABLES['LOSS_STR']
+        loss_str=ENV_VARIABLES['LOSS_STR'],
+        num_mutations=MUTATIONS_PER_ITER,
     )
 
     run_for_time(evolution, hour, minute, second)

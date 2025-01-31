@@ -1,5 +1,5 @@
-# Jupyter notebook
-jupyter                   # For running Jupyter notebooks
+# # Jupyter notebook
+# jupyter                   # For running Jupyter notebooks
 
 # Data manipulation and visualization
 numpy                     # For numerical computations
@@ -12,5 +12,5 @@ scikit-learn              # For model selection and preprocessing
 # TensorFlow Datasets for dataset utilities
 tensorflow-datasets       # For loading datasets like CIFAR-10
 
-# Ensure pip is up to date
-pip
+# # Ensure pip is up to date
+# pip

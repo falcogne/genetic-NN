@@ -170,11 +170,13 @@ def run_for_time(evolution, hours, minutes, seconds):
 
 
 def print_best_networks(evolution):
+    print()
     print("&"*100)
     print()
     print("Printing results of best networks (will train if untrained)")
     print()
     print("&"*100)
+    print()
     epochs = ENV_VARIABLES['EPOCHS']
 
     evolution.train_population(epochs=epochs)
@@ -189,9 +191,9 @@ def print_best_networks(evolution):
         print(network)
 
 
-    print("loss, accuracy, precision, recall, auc")
-    for ele in evolution.all_stats:
-        print(ele)
+    # print("loss, accuracy, precision, recall, auc")
+    # for ele in evolution.all_stats:
+    #     print(ele)
     print("\n best fitness stats over iterations:")
     print("loss, accuracy, precision, recall, auc")
     for ele in evolution.best_stats:

@@ -190,7 +190,7 @@ class EvolutionStructure():
 
         print("\n rank, remove, and replace")
         self.rank_population()
-        self.kill_population()
+        self.kill_population(kill_proportion=0.5)
         self.replace_population()
 
         print("\n*done with iteration*\n")
